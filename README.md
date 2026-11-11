@@ -13,8 +13,8 @@ It demonstrates Infrastructure as Code (IaC), modular Terraform design, AWS netw
 
 The initial implementation focuses on building a Virtual Private Cloud (VPC) with public and private subnets distributed across two Availability Zones.
 
-**Project owner:** NISA Technology  
-**Environment:** Development  
+**Project owner:** NISA Technology
+**Environment:** Development
 **AWS Region:** `eu-north-1` (Stockholm)
 
 ## Architecture
