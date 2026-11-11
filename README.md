@@ -2,18 +2,19 @@
 
 ![Terraform](https://img.shields.io/badge/Terraform-1.17.0-7B42BC?logo=terraform)
 ![AWS](https://img.shields.io/badge/AWS-eu--north--1-FF9900?logo=amazonaws)
-![Infrastructure](https://img.shields.io/badge/Infrastructure-as%20Code-blue)
+![Infrastructure as Code](https://img.shields.io/badge/Infrastructure-as%20Code-blue)
+![GitHub Actions](https://github.com/bukummy8/terraform-aws-infrastructure/actions/workflows/terraform.yml/badge.svg)
 
 ## Project Overview
 
 This project provisions a reusable AWS network infrastructure using **Terraform**.
 
-It demonstrates Infrastructure as Code (IaC), modular Terraform design, AWS networking fundamentals, resource tagging, input validation, and infrastructure planning.
+It demonstrates Infrastructure as Code (IaC), modular Terraform design, AWS networking fundamentals, resource tagging, input validation, infrastructure planning, and automated CI validation.
 
 The initial implementation focuses on building a Virtual Private Cloud (VPC) with public and private subnets distributed across two Availability Zones.
 
-**Project owner:** NISA Technology
-**Environment:** Development
+**Project owner:** NISA Technology  
+**Environment:** Development  
 **AWS Region:** `eu-north-1` (Stockholm)
 
 ## Architecture
@@ -28,24 +29,52 @@ The planned infrastructure consists of:
 - A private route table without a direct internet route.
 - Route table associations for all four subnets.
 
-### Network architecture
+### Network Architecture Diagram
 
-```text
-                    AWS CLOUD
-                        |
-              VPC: 10.0.0.0/16
-                        |
-             +----------+----------+
-             |                     |
-        Public Route Table    Private Route Table
-             |                     |
-       Internet Gateway       Local VPC Route
-             |                     |
-       +-----+-----+         +-----+-----+
-       |           |         |           |
-   Public AZ-a  Public AZ-b Private AZ-a Private AZ-b
-   10.0.1.0/24 10.0.2.0/24 10.0.11.0/24 10.0.12.0/24
+The following diagram represents the current Terraform configuration.
+
+```mermaid
+flowchart TB
+    Internet((Internet))
+
+    subgraph AWS["AWS Cloud - eu-north-1"]
+        IGW["Internet Gateway"]
+
+        subgraph VPC["VPC: nisa-terraform-dev-vpc<br/>CIDR: 10.0.0.0/16"]
+
+            PUBRT["Public Route Table<br/>0.0.0.0/0 → Internet Gateway"]
+            PRIVRT["Private Route Table<br/>Local VPC route only"]
+
+            subgraph AZ1["Availability Zone: eu-north-1a"]
+                PUB1["Public Subnet 1<br/>10.0.1.0/24<br/>Public IP mapping enabled"]
+                PRIV1["Private Subnet 1<br/>10.0.11.0/24<br/>No public IP mapping"]
+            end
+
+            subgraph AZ2["Availability Zone: eu-north-1b"]
+                PUB2["Public Subnet 2<br/>10.0.2.0/24<br/>Public IP mapping enabled"]
+                PRIV2["Private Subnet 2<br/>10.0.12.0/24<br/>No public IP mapping"]
+            end
+
+            PUBRT --> PUB1
+            PUBRT --> PUB2
+
+            PRIVRT --> PRIV1
+            PRIVRT --> PRIV2
+
+            PUBRT --> IGW
+        end
+
+        IGW --> Internet
+    end
 ```
+
+**Architecture notes:**
+
+- Public subnets use a shared route table with a default route to the Internet Gateway.
+- Private subnets use a separate route table with only the automatic local VPC route.
+- Private subnets do not have a NAT Gateway or direct internet route.
+- Public IP mapping is enabled for public subnets and disabled for private subnets.
+- Public IP mapping alone does not guarantee that a workload is reachable from the internet; routing and security rules also matter.
 
 ### IP Address Allocation
 
@@ -61,6 +90,9 @@ The planned infrastructure consists of:
 
 ```text
 terraform-aws-infrastructure/
+├── .github/
+│   └── workflows/
+│       └── terraform.yml
 ├── environments/
 │   └── dev/
 ├── modules/
@@ -78,6 +110,8 @@ The root configuration defines the AWS provider and calls the reusable network m
 
 The network module manages the VPC, subnets, Internet Gateway, route tables, routes, and subnet associations.
 
+The `.github/workflows/terraform.yml` file defines the GitHub Actions CI workflow.
+
 The `environments/dev` directory is reserved for a future environment-specific configuration.
 
 ## Technologies Used
@@ -87,6 +121,8 @@ The `environments/dev` directory is reserved for a future environment-specific c
 - **AWS CLI:** AWS authentication and account access.
 - **HCL:** Terraform configuration language.
 - **Git:** Version control.
+- **GitHub:** Source code hosting and collaboration.
+- **GitHub Actions:** Continuous Integration and automated validation.
 
 ## Prerequisites
 
@@ -124,7 +160,7 @@ Avoid committing AWS credentials, access keys, private keys, or other secrets to
 Clone the repository:
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
+git clone https://github.com/bukummy8/terraform-aws-infrastructure.git
 cd terraform-aws-infrastructure
 ```
 
@@ -171,11 +207,12 @@ terraform apply tfplan
 The network module supports:
 
 - Configurable VPC CIDR.
-- Configurable availability zones.
+- Configurable Availability Zones.
 - Configurable public and private subnet CIDRs.
 - Configurable environment names.
 - Common resource tags.
-- Input validation for network names, CIDR syntax, availability zone uniqueness, minimum Availability Zone count, and subnet count matching.
+- Input validation for network names, IPv4 CIDR syntax, Availability Zone uniqueness, minimum Availability Zone count, and subnet count matching.
+- A validation resource that checks for duplicate subnet CIDR entries.
 - Outputs for VPC ID, subnet IDs, and Internet Gateway ID.
 
 ## Resource Tagging
@@ -188,6 +225,30 @@ Resources receive consistent tags to support identification and cost allocation.
 | Environment | dev |
 | Owner | NISA Technology |
 | ManagedBy | Terraform |
+
+## Continuous Integration
+
+This repository uses **GitHub Actions** to automate Terraform checks.
+
+The workflow is located at:
+
+`.github/workflows/terraform.yml`
+
+It runs automatically when code is pushed to the `main` branch or a pull request targets `main`.
+
+The workflow performs the following checks:
+
+1. Checks out the repository.
+2. Sets up Terraform 1.17.0.
+3. Checks Terraform formatting.
+4. Initializes Terraform without configuring a backend.
+5. Validates the Terraform configuration.
+
+The workflow does not deploy AWS infrastructure or require AWS credentials.
+
+**Workflow status:**
+
+[![Terraform CI](https://github.com/bukummy8/terraform-aws-infrastructure/actions/workflows/terraform.yml/badge.svg)](https://github.com/bukummy8/terraform-aws-infrastructure/actions/workflows/terraform.yml)
 
 ## Security Considerations
 
@@ -237,18 +298,21 @@ Planned enhancements include:
 - NAT Gateway as an optional feature.
 - VPC Flow Logs and network monitoring.
 - Remote Terraform state management with encryption and state locking.
-- CI/CD integration using GitHub Actions.
-- Automated Terraform formatting, validation, and security scanning.
+- Automated Terraform security scanning.
 - Deployment of an application workload to demonstrate the network.
 
 ## Project Status
 
-**Current stage:** Network module development, architecture verification, and documentation.
+**Current stage:** Network module development, architecture verification, documentation, and GitHub Actions CI integration.
 
-The current Terraform execution plan proposes 13 resources to create, with no changes or deletions.
+The current Terraform execution plan proposes **13 AWS resources and 1 Terraform validation resource**, for a total of 14 Terraform resources.
 
-No infrastructure has been applied to AWS yet.
+The plan contains no changes or deletions.
+
+**No infrastructure has been applied to AWS yet.**
 
 ---
 
 Built by **NISA Technology** — Infrastructure as Code, Cloud & DevOps.
+
+GitHub: https://github.com/bukummy8/terraform-aws-infrastructure
